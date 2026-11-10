@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Parkeren</title>
+<meta name="theme-color" content="#F4F3EF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111315" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Parkeren">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<style>
+:root{
+  --bg:#F4F3EF; --card:#FFFFFF; --ink:#16181D; --muted:#6B7280; --line:#E4E2DA; --soft:#ECEAE3;
+  --go:#1F8A4C; --go-ink:#fff; --stop:#C8372D; --warn:#B86A00; --warn-bg:#FFF3DC; --plate:#F6C915;
+  --r:18px;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#111315; --card:#1B1E22; --ink:#F2F2F0; --muted:#9AA0A6; --line:#2B2F35; --soft:#24282D;
+    --go:#2FA863; --stop:#E5574C; --warn:#F0A63A; --warn-bg:#33270F; }
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+html,body{margin:0; background:var(--bg); color:var(--ink);
+  font:16px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
+  -webkit-text-size-adjust:100%}
+body{min-height:100dvh; padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+button,input{font:inherit; color:inherit}
+button{cursor:pointer; border:0; background:none; padding:0}
+[hidden]{display:none!important}
+.wrap{max-width:520px; margin:0 auto; padding:14px 16px 40px}
+
+header{display:flex; align-items:center; gap:10px; padding:6px 0 14px}
+header h1{font-size:26px; font-weight:750; letter-spacing:-.02em; margin:0; flex:1}
+.pill{display:flex; flex-direction:column; align-items:flex-end; padding:7px 12px; border-radius:14px;
+  background:var(--card); border:1px solid var(--line); text-decoration:none; color:inherit; line-height:1.15}
+.pill b{font-size:16px; font-variant-numeric:tabular-nums}
+.pill small{font-size:11.5px; color:var(--muted)}
+.pill.low{background:var(--warn-bg); border-color:transparent}
+.pill.low small{color:var(--warn); font-weight:600}
+.icon-btn{width:42px; height:42px; border-radius:14px; background:var(--card); border:1px solid var(--line);
+  display:grid; place-items:center}
+.icon-btn svg{width:21px; height:21px}
+
+h2{font-size:13px; font-weight:650; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:22px 4px 10px}
+.card{background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:16px}
+.card + .card{margin-top:12px}
+
+.who{display:flex; align-items:center; gap:10px}
+.who .name{font-size:19px; font-weight:700; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.plate{display:inline-flex; align-items:stretch; border-radius:6px; overflow:hidden; background:var(--plate); color:#111;
+  font:700 14px/1 ui-monospace,"SF Mono",Menlo,monospace; letter-spacing:.06em; border:1px solid rgba(0,0,0,.25)}
+.plate::before{content:""; width:7px; background:#1E4FB5}
+.plate span{padding:5px 8px 4px}
+
+.count{display:flex; align-items:baseline; gap:10px; margin:14px 0 4px}
+.count .left{font-size:46px; font-weight:750; letter-spacing:-.03em; font-variant-numeric:tabular-nums; line-height:1}
+.count .unit{font-size:15px; color:var(--muted)}
+.count.soon .left{color:var(--warn)}
+.count.over .left{color:var(--stop)}
+.meta{display:flex; justify-content:space-between; color:var(--muted); font-size:14.5px; font-variant-numeric:tabular-nums}
+.bar{height:6px; border-radius:3px; background:var(--soft); margin:12px 0 14px; overflow:hidden}
+.bar i{display:block; height:100%; background:var(--go); border-radius:3px; transition:width .9s linear}
+.count.soon ~ .bar i{background:var(--warn)}
+.note{font-size:13.5px; color:var(--muted); margin:-4px 0 12px}
+.note.err{color:var(--stop)}
+
+.row{display:grid; grid-template-columns:repeat(4,1fr); gap:8px}
+.chip{height:46px; border-radius:13px; background:var(--soft); font-weight:650; font-size:15px; white-space:nowrap}
+.chip:active{transform:scale(.97)}
+.chip.on{background:var(--ink); color:var(--bg)}
+.big{width:100%; height:54px; border-radius:15px; font-size:17px; font-weight:700; margin-top:10px}
+.big.go{background:var(--go); color:var(--go-ink)}
+.big.stop{background:transparent; color:var(--stop); border:1.5px solid var(--stop)}
+.big.stop.arm{background:var(--stop); color:#fff}
+.big.plain{background:var(--soft)}
+.big:disabled,.chip:disabled{opacity:.5}
+.link{color:var(--muted); font-size:14px; text-decoration:underline; text-underline-offset:3px; padding:10px 4px 0; display:inline-block}
+
+.grid{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+.fav{background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:14px; text-align:left;
+  display:flex; flex-direction:column; gap:9px; min-height:92px}
+.fav:active{transform:scale(.98)}
+.fav .name{font-size:17px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.fav .hint{font-size:12.5px; color:var(--muted); margin-top:auto}
+.fav.busy{opacity:.55}
+.fav.new{border-style:dashed; justify-content:center; align-items:center; color:var(--muted); font-weight:650}
+.empty{color:var(--muted); font-size:15px; padding:6px 4px}
+
+.banner{background:var(--warn-bg); border-radius:var(--r); padding:14px 16px; font-size:14.5px; margin-bottom:12px}
+.banner b{display:block; margin-bottom:2px}
+.banner button{margin-top:10px; height:42px; padding:0 16px; border-radius:12px; background:var(--ink); color:var(--bg); font-weight:650}
+
+.scrim{position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:flex-end; justify-content:center; z-index:10}
+.sheet{background:var(--bg); width:100%; max-width:520px; border-radius:24px 24px 0 0; padding:10px 18px calc(22px + env(safe-area-inset-bottom));
+  max-height:92dvh; overflow:auto; animation:up .22s ease-out}
+@keyframes up{from{transform:translateY(40px); opacity:0}}
+@media (prefers-reduced-motion: reduce){.sheet{animation:none} .bar i{transition:none}}
+.grab{width:40px; height:5px; border-radius:3px; background:var(--line); margin:0 auto 14px}
+.sheet h3{font-size:21px; margin:0 0 4px; font-weight:750; letter-spacing:-.01em}
+.sheet .sub{color:var(--muted); font-size:14.5px; margin:0 0 16px}
+.sheet .row{grid-template-columns:repeat(3,1fr)}
+.sheet label.f{display:block; font-size:13px; color:var(--muted); font-weight:600; margin:14px 2px 6px}
+.in{width:100%; height:50px; border-radius:13px; border:1px solid var(--line); background:var(--card); padding:0 14px; font-size:17px}
+.in.plate-in{font:700 20px/1 ui-monospace,"SF Mono",Menlo,monospace; letter-spacing:.08em; text-transform:uppercase}
+.sum{display:flex; justify-content:space-between; align-items:baseline; margin:16px 2px 0; font-size:15px; color:var(--muted)}
+.sum b{color:var(--ink); font-size:17px; font-variant-numeric:tabular-nums}
+.check{display:flex; align-items:center; gap:10px; margin:14px 2px 0; font-size:15px}
+.check input{width:22px; height:22px; accent-color:var(--go)}
+.set{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:13px 0; border-top:1px solid var(--line)}
+.set:first-of-type{border-top:0}
+.set .t{font-size:15.5px}
+.set .t small{display:block; color:var(--muted); font-size:13px}
+.seg{display:flex; background:var(--soft); border-radius:11px; padding:3px}
+.seg button{padding:7px 10px; border-radius:9px; font-size:14px; font-weight:600; white-space:nowrap}
+.seg button.on{background:var(--card); box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.mini{height:38px; padding:0 14px; border-radius:11px; background:var(--soft); font-weight:650; font-size:14.5px}
+.mini.danger{color:var(--stop)}
+
+.login{max-width:420px; margin:8dvh auto 0; padding:0 22px}
+.login h1{font-size:30px; letter-spacing:-.02em; margin:18px 0 6px}
+.login p{color:var(--muted); margin:0 0 8px}
+.logo{width:68px; height:68px; border-radius:18px}
+.toast{position:fixed; left:50%; bottom:calc(22px + env(safe-area-inset-bottom)); transform:translateX(-50%);
+  background:var(--ink); color:var(--bg); padding:12px 18px; border-radius:14px; font-size:15px; font-weight:600;
+  z-index:30; max-width:88vw; text-align:center; box-shadow:0 6px 24px rgba(0,0,0,.25)}
+.spin{display:inline-block; width:18px; height:18px; border:2.5px solid currentColor; border-right-color:transparent; border-radius:50%;
+  animation:sp .7s linear infinite; vertical-align:-3px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.stale{font-size:12.5px; color:var(--muted); text-align:center; margin-top:18px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="sheet"></div>
+<div id="toast" class="toast" hidden></div>
+
+<script>
+"use strict";
+const API = "https://tlcmhjkddbocceymgmes.supabase.co/functions/v1/park";
+const DEMO = location.search.includes("demo");
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const LS = {
+  get(k, d = null) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  del(k) { try { localStorage.removeItem(k); } catch {} },
+};
+let token = LS.get("park_token");
+let S = LS.get("park_state");       // laatst bekende stand
+let fetchedAt = 0, offline = false, busy = false, skew = 0;
+const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+
+const now = () => Date.now() + skew;
+const euro = (n) => "€ " + Number(n).toFixed(2).replace(".", ",");
+const hhmm = (d) => new Date(d).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" });
+const dayHint = (d) => { const a = new Date(d), b = new Date(now()); return a.toDateString() === b.toDateString() ? "" : " (morgen)"; };
+const fmtPlate = (p) => esc(p);
+function dur(mins) {
+  mins = Math.max(0, Math.round(mins));
+  if (mins < 60) return mins + " min";
+  const h = Math.floor(mins / 60), m = mins % 60;
+  return h + " u" + (m ? " " + String(m).padStart(2, "0") : "");
+}
+
+function toast(msg, ms = 2800) {
+  const t = $("#toast"); t.textContent = msg; t.hidden = false;
+  clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), ms);
+}
+
+async function api(action, data = {}) {
+  if (DEMO) return demoApi(action, data);
+  let r;
+  try {
+    r = await fetch(API, { method: "POST", body: JSON.stringify({ action, token, ...data }) });
+  } catch { throw new Error("Geen verbinding. Probeer het opnieuw."); }
+  const j = await r.json().catch(() => ({}));
+  if (r.status === 401 && action !== "login") { token = null; LS.del("park_token"); render(); }
+  if (!r.ok) throw new Error(j.error || "Er ging iets mis (" + r.status + ")");
+  return j;
+}
+function setState(j) {
+  if (!j || !j.sessions) return;
+  S = j; fetchedAt = Date.now(); offline = false;
+  if (j.now) skew = new Date(j.now).getTime() - Date.now();
+  if (Math.abs(skew) < 5000) skew = 0;
+  LS.set("park_state", S);
+  render();
+}
+async function refresh(silent = true) {
+  if (!token || busy) return;
+  try { setState(await api("state")); }
+  catch (e) { offline = true; if (!silent) toast(e.message); render(); }
+}
+async function act(action, data, okMsg) {
+  if (busy) return false;
+  busy = true; document.body.classList.add("busy");
+  try { setState(await api(action, data)); if (okMsg) toast(okMsg); return true; }
+  catch (e) { toast(e.message, 4200); return false; }
+  finally { busy = false; document.body.classList.remove("busy"); }
+}
+
+// ---------- schermen ----------
+function render() {
+  const app = $("#app");
+  if (!token) return (app.innerHTML = loginView());
+  if (!S) return (app.innerHTML = `<div class="wrap"><header><h1>Parkeren</h1></header><p class="empty"><span class="spin"></span> Even ophalen…</p></div>`);
+  const low = S.balance !== null && S.balance < (S.settings?.low_balance ?? 2);
+  const buys = S.balance !== null && S.rate_per_hour ? (S.balance / S.rate_per_hour) * 60 : null;
+  const activePlates = new Set(S.sessions.map((s) => s.plate));
+  app.innerHTML = `<div class="wrap">
+    <header>
+      <h1>Parkeren</h1>
+      ${S.balance !== null ? `<a class="pill ${low ? "low" : ""}" href="https://mijn.2park.nl/" target="_blank" rel="noopener" aria-label="Saldo, tik om op te waarderen in 2Park">
+        <b>${euro(S.balance)}</b><small>${low ? "opwaarderen" : buys ? "≈ " + dur(buys) + " saldo" : "saldo"}</small></a>` : ""}
+      <button class="icon-btn" data-do="settings" aria-label="Instellingen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></button>
+    </header>
+    ${pushBanner()}
+    ${S.sessions.length ? `<h2>Nu aangemeld</h2>` + S.sessions.map(sessionCard).join("") : ""}
+    <h2>Bezoek aanmelden</h2>
+    <div class="grid">
+      ${S.favorites.map((f) => favTile(f, activePlates.has(f.plate))).join("")}
+      <button class="fav new" data-do="new">+ Ander kenteken</button>
+    </div>
+    ${!S.favorites.length ? `<p class="empty">Nog geen favorieten. Meld een kenteken aan en bewaar het met een naam, dan staat het hier de volgende keer klaar.</p>` : ""}
+    <p class="stale">${offline ? "Geen verbinding: dit is de laatst bekende stand. " : ""}<button class="link" data-do="refresh" style="padding:0">Vernieuwen</button></p>
+  </div>`;
+  tickUI();
+}
+
+function loginView() {
+  return `<form class="login" id="loginForm" autocomplete="on">
+    <img class="logo" src="icon-192.png" alt="">
+    <h1>Parkeren</h1>
+    <p>Log één keer in met je 2Park-gegevens. Daarna meld je bezoek aan met één tik en krijg je een seintje voordat de tijd afloopt.</p>
+    <label class="f" for="em">E-mailadres van 2Park</label>
+    <input class="in" id="em" type="email" inputmode="email" autocomplete="username" required>
+    <label class="f" for="pw">Wachtwoord</label>
+    <input class="in" id="pw" type="password" autocomplete="current-password" required>
+    <button class="big go" type="submit" id="loginBtn">Inloggen</button>
+    <p style="font-size:13px;margin-top:14px">Je wachtwoord wordt versleuteld bewaard in je eigen Supabase-project, zodat de app ook kan verlengen en waarschuwen als je telefoon in je zak zit.</p>
+  </form>`;
+}
+
+function pushBanner() {
+  if (S.push?.subscribed && pushState() === "granted") return "";
+  if (LS.get("park_push_later", 0) > Date.now()) return "";
+  if (isIOS && !standalone) {
+    return `<div class="banner"><b>Zet de app op je beginscherm</b>Tik onderin Safari op het deel-icoon en kies “Zet op beginscherm”. Open de app daarna vanaf je beginscherm: pas dan kan de iPhone je herinneringen sturen.
+      <div><button data-do="push-later">Later</button></div></div>`;
+  }
+  if (pushState() === "unsupported") return "";
+  if (pushState() === "denied") {
+    return `<div class="banner"><b>Meldingen staan uit</b>Zet ze aan via Instellingen › Meldingen › Parkeren, anders krijg je geen herinnering.</div>`;
+  }
+  return `<div class="banner"><b>Herinneringen aanzetten</b>Krijg een melding voordat de parkeertijd afloopt, als die is afgelopen en als je saldo bijna op is.
+    <div><button data-do="push-on">Meldingen aanzetten</button></div></div>`;
+}
+
+function sessionCard(s) {
+  const auto = s.mode === "auto";
+  return `<div class="card" data-id="${esc(s.id)}">
+    <div class="who"><span class="name">${esc(s.name || "Bezoek")}</span><span class="plate"><span>${fmtPlate(s.plate)}</span></span></div>
+    <div class="count" data-count data-start="${esc(s.start)}" data-end="${esc(s.end)}" data-planned="${s.planned ? 1 : ""}"><span class="left">–</span><span class="unit"></span></div>
+    <div class="meta"><span>${s.planned ? "start " + hhmm(s.start) + " · " : ""}tot ${hhmm(s.end)}${dayHint(s.end)}</span><span>${s.cost != null ? euro(s.cost) : ""}</span></div>
+    <div class="bar"><i style="width:0%"></i></div>
+    ${auto ? `<p class="note">Wordt vanzelf verlengd per ${dur(s.block_min)}${s.max_until ? ", uiterlijk tot " + hhmm(s.max_until) : ""}.</p>` : ""}
+    ${s.last_error ? `<p class="note err">Verlengen mislukte: ${esc(s.last_error)}</p>` : ""}
+    <div class="row">
+      <button class="chip" data-do="ext" data-min="10">+10 min</button>
+      <button class="chip" data-do="ext" data-min="30">+30 min</button>
+      <button class="chip" data-do="ext" data-min="60">+1 uur</button>
+      <button class="chip" data-do="ext-time">Eindtijd</button>
+    </div>
+    <button class="big stop" data-do="stop">Vertrokken · afmelden</button>
+    <button class="link" data-do="auto">${auto ? "Automatisch verlengen uitzetten" : "Automatisch verlengen tot ik afmeld"}</button>
+  </div>`;
+}
+
+function favTile(f, active) {
+  const pref = LS.get("park_pref", {})[f.plate];
+  const hint = active ? "staat aangemeld" : pref ? "vorige keer: " + prefLabel(pref) : "tik om aan te melden";
+  return `<button class="fav ${active ? "busy" : ""}" data-do="fav" data-plate="${esc(f.plate)}" ${active ? "disabled" : ""}>
+    <span class="name">${esc(f.name || f.plate)}</span>
+    <span class="plate" style="align-self:flex-start"><span>${fmtPlate(f.plate)}</span></span>
+    <span class="hint">${hint}</span></button>`;
+}
+const prefLabel = (p) => p.kind === "auto" ? "tot ik afmeld" : p.kind === "time" ? "tot " + p.time : dur(p.min);
+
+function tickUI() {
+  for (const el of document.querySelectorAll("[data-count]")) {
+    const end = new Date(el.dataset.end).getTime(), start = new Date(el.dataset.start).getTime();
+    const left = end - now(), L = $(".left", el), U = $(".unit", el), bar = $(".bar i", el.parentElement);
+    if (el.dataset.planned && start > now()) { L.textContent = hhmm(start); U.textContent = "gepland"; continue; }
+    if (left <= 0) { L.textContent = "0:00"; U.textContent = "afgelopen"; el.className = "count over"; if (bar) bar.style.width = "100%"; continue; }
+    const m = Math.floor(left / 60000), s = Math.floor((left % 60000) / 1000);
+    if (m >= 60) { L.textContent = Math.floor(m / 60) + ":" + String(m % 60).padStart(2, "0"); U.textContent = "uur over"; }
+    else { L.textContent = m + ":" + String(s).padStart(2, "0"); U.textContent = "min over"; }
+    el.className = "count" + (left <= 5 * 60000 ? " soon" : "");
+    if (bar) bar.style.width = Math.min(100, Math.max(0, ((now() - start) / (end - start)) * 100)) + "%";
+  }
+}
+
+// ---------- sheets ----------
+function openSheet(html) {
+  $("#sheet").innerHTML = `<div class="scrim" data-do="close-scrim"><div class="sheet" role="dialog" aria-modal="true"><div class="grab"></div>${html}</div></div>`;
+}
+function closeSheet() { $("#sheet").innerHTML = ""; }
+
+let draft = null;
+function timePlus(mins) {
+  const d = new Date(now() + mins * 60000);
+  return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+}
+function timeToDate(t) {
+  const [h, m] = t.split(":").map(Number);
+  const d = new Date(now()); d.setHours(h, m, 0, 0);
+  if (d.getTime() <= now() + 30000) d.setDate(d.getDate() + 1);
+  return d;
+}
+function startSheet(fav) {
+  const pref = fav ? LS.get("park_pref", {})[fav.plate] : null;
+  draft = { fav, kind: pref?.kind || "min", min: pref?.min || 30, time: pref?.kind === "time" ? pref.time : timePlus(120) };
+  if (draft.kind === "time" && timeToDate(draft.time).getTime() - now() > 12 * 3600e3) draft.time = timePlus(120);
+  drawStart();
+}
+function drawStart() {
+  const d = draft, st = S.settings;
+  const prevPlate = $("#np")?.value ?? "", prevName = $("#nn")?.value ?? "", prevSave = $("#ns")?.checked ?? true;
+  let end, mins, line;
+  if (d.kind === "auto") { mins = st.auto_block; end = new Date(now() + mins * 60000); }
+  else if (d.kind === "time") { end = timeToDate(d.time); mins = (end - now()) / 60000; }
+  else { mins = d.min; end = new Date(now() + mins * 60000); }
+  const cost = S.rate_per_hour ? (mins / 60) * S.rate_per_hour : null;
+  const short = cost !== null && S.balance !== null && cost > S.balance + 0.005;
+  if (d.kind === "auto") {
+    line = `<p class="note" style="margin:14px 2px 0">Start met ${dur(st.auto_block)} en verlengt vanzelf tot je op “Vertrokken” tikt, uiterlijk tot ${hhmm(now() + st.auto_max_hours * 3600e3)} (${st.auto_max_hours} uur). Je krijgt elk${st.nudge_min === 60 ? " uur" : "e " + dur(st.nudge_min)} een seintje.</p>`;
+  } else {
+    line = `<div class="sum"><span>tot <b>${hhmm(end)}</b>${dayHint(end)} · ${dur(mins)}</span><span>${cost !== null ? "≈ <b>" + euro(cost) + "</b>" : ""}</span></div>`;
+  }
+  const chip = (kind, min, label) => `<button class="chip ${d.kind === kind && (kind !== "min" || d.min === min) ? "on" : ""}" data-do="pick" data-kind="${kind}" data-min="${min || ""}">${label}</button>`;
+  openSheet(`
+    ${d.fav ? `<h3>${esc(d.fav.name || d.fav.plate)}</h3><p class="sub"><span class="plate"><span>${fmtPlate(d.fav.plate)}</span></span></p>`
+      : `<h3>Ander kenteken</h3>
+         <label class="f" for="np">Kenteken</label><input class="in plate-in" id="np" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false" maxlength="10" placeholder="AB123C" value="${esc(prevPlate)}">
+         <label class="f" for="nn">Naam (optioneel)</label><input class="in" id="nn" maxlength="40" placeholder="Bijv. Loodgieter" value="${esc(prevName)}">
+         <label class="check"><input type="checkbox" id="ns" ${prevSave ? "checked" : ""}> Bewaren als favoriet (als je een naam invult)</label>
+         <label class="f">Hoe lang?</label>`}
+    <div class="row">
+      ${chip("min", 10, "10 min")}${chip("min", 30, "30 min")}${chip("min", 60, "1 uur")}
+      ${chip("min", 120, "2 uur")}${chip("time", 0, "Eindtijd")}${chip("auto", 0, "Tot ik afmeld")}
+    </div>
+    ${d.kind === "time" ? `<label class="f" for="et">Aangemeld tot</label><input class="in" id="et" type="time" value="${esc(d.time)}">` : ""}
+    ${line}
+    ${short ? `<p class="note err" style="margin:10px 2px 0">Je saldo (${euro(S.balance)}) is hiervoor waarschijnlijk te laag.</p>` : ""}
+    <button class="big go" data-do="start">Aanmelden</button>
+    <button class="big plain" data-do="close">Annuleren</button>`);
+}
+
+function settingsSheet() {
+  const st = S.settings;
+  const seg = (key, opts) => `<div class="seg">${opts.map(([v, l]) => `<button class="${Number(st[key]) === v ? "on" : ""}" data-do="set" data-key="${key}" data-val="${v}">${l}</button>`).join("")}</div>`;
+  const ps = pushState();
+  const pushOn = S.push?.subscribed && ps === "granted";
+  openSheet(`<h3>Instellingen</h3><p class="sub">${esc(S.owner_email || "")}</p>
+    <div class="set"><div class="t">Meldingen<small>${pushOn ? "Staan aan op dit apparaat" : ps === "unsupported" ? (isIOS && !standalone ? "Zet de app eerst op je beginscherm" : "Niet beschikbaar in deze browser") : ps === "denied" ? "Geblokkeerd in de iPhone-instellingen" : "Staan nog uit"}</small></div>
+      ${pushOn ? `<button class="mini" data-do="push-test">Test</button>` : ps === "default" || (ps === "granted" && !S.push?.subscribed) ? `<button class="mini" data-do="push-on">Aanzetten</button>` : ""}</div>
+    <div class="set"><div class="t">Herinnering<small>minuten voor het einde</small></div>${seg("lead_min", [[3, "3"], [5, "5"], [10, "10"], [15, "15"]])}</div>
+    <div class="set"><div class="t">Saldo-waarschuwing<small>melding als het saldo lager is</small></div>${seg("low_balance", [[2, "€ 2"], [5, "€ 5"], [10, "€ 10"]])}</div>
+    <div class="set"><div class="t">Automatisch verlengen<small>per blok van</small></div>${seg("auto_block", [[10, "10 min"], [30, "30 min"], [60, "1 uur"]])}</div>
+    <div class="set"><div class="t">Maximum<small>daarna stopt verlengen vanzelf</small></div>${seg("auto_max_hours", [[2, "2 u"], [4, "4 u"], [8, "8 u"]])}</div>
+    <div class="set"><div class="t">“Staat nog aangemeld”<small>seintje bij automatisch verlengen</small></div>${seg("nudge_min", [[30, "30 min"], [60, "1 uur"], [120, "2 uur"]])}</div>
+    ${S.favorites.length ? `<label class="f" style="margin-top:20px">Favorieten</label>` + S.favorites.map((f) => `<div class="set"><div class="t">${esc(f.name || f.plate)}<small>${fmtPlate(f.plate)}</small></div><button class="mini danger" data-do="fav-del" data-plate="${esc(f.plate)}">Verwijderen</button></div>`).join("") : ""}
+    <div class="set"><div class="t">2Park<small>opwaarderen en parkeerhistorie</small></div><a class="mini" style="display:grid;place-items:center;text-decoration:none" href="https://mijn.2park.nl/" target="_blank" rel="noopener">Openen</a></div>
+    <div class="set"><div class="t">Account</div><button class="mini danger" data-do="logout">Uitloggen</button></div>
+    <button class="big plain" data-do="close">Klaar</button>`);
+}
+
+// ---------- meldingen ----------
+function pushState() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return "unsupported";
+  return Notification.permission;
+}
+function b64ToBytes(b64) {
+  const s = atob(b64.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (b64.length % 4)) % 4));
+  return Uint8Array.from(s, (c) => c.charCodeAt(0));
+}
+async function enablePush() {
+  try {
+    if (pushState() === "unsupported") return toast("Meldingen werken pas als de app op je beginscherm staat.", 4500);
+    const perm = await Notification.requestPermission();
+    if (perm !== "granted") { render(); return toast("Meldingen zijn niet toegestaan."); }
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(S.push.public_key) });
+    await api("push_subscribe", { subscription: sub.toJSON() });
+    S.push.subscribed = true; LS.set("park_state", S); render();
+    await api("push_test").then(() => toast("Meldingen staan aan. Er komt nu een testmelding.")).catch((e) => toast(e.message, 4500));
+  } catch (e) { toast("Aanzetten lukte niet: " + e.message, 4500); }
+}
+
+// ---------- tikken ----------
+document.addEventListener("submit", async (e) => {
+  if (e.target.id !== "loginForm") return;
+  e.preventDefault();
+  const btn = $("#loginBtn"); btn.disabled = true; btn.innerHTML = '<span class="spin"></span>';
+  try {
+    const j = await api("login", { email: $("#em").value, password: $("#pw").value, label: isIOS ? "iPhone" : navigator.platform });
+    token = j.token; LS.set("park_token", token); S = null; render(); await refresh(false);
+  } catch (err) { toast(err.message, 4500); btn.disabled = false; btn.textContent = "Inloggen"; }
+});
+
+document.addEventListener("input", (e) => {
+  if (e.target.id === "et" && draft) { draft.time = e.target.value || draft.time; drawStartKeepFocus(); }
+  if (e.target.id === "np") e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "");
+});
+function drawStartKeepFocus() {
+  const sum = $(".sheet .sum"); if (!sum) return;
+  const end = timeToDate(draft.time), mins = (end - now()) / 60000, cost = S.rate_per_hour ? (mins / 60) * S.rate_per_hour : null;
+  sum.innerHTML = `<span>tot <b>${hhmm(end)}</b>${dayHint(end)} · ${dur(mins)}</span><span>${cost !== null ? "≈ <b>" + euro(cost) + "</b>" : ""}</span>`;
+}
+
+let armT = null;
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-do]"); if (!b) return;
+  const what = b.dataset.do, card = b.closest("[data-id]"), id = card?.dataset.id;
+  const sess = id ? S.sessions.find((s) => s.id === id) : null;
+  switch (what) {
+    case "close-scrim": if (e.target === b) closeSheet(); break;
+    case "close": closeSheet(); break;
+    case "refresh": await refresh(false); break;
+    case "settings": settingsSheet(); break;
+    case "new": startSheet(null); break;
+    case "fav": startSheet(S.favorites.find((f) => f.plate === b.dataset.plate)); break;
+    case "pick":
+      draft.kind = b.dataset.kind; if (b.dataset.min) draft.min = Number(b.dataset.min);
+      drawStart(); break;
+    case "start": {
+      const d = draft;
+      const plate = d.fav ? d.fav.plate : ($("#np")?.value || "").replace(/[^A-Z0-9]/gi, "");
+      if (plate.length < 4) return toast("Vul een kenteken in");
+      const name = d.fav ? d.fav.name : ($("#nn")?.value || "").trim();
+      const body = { plate, name, save_favorite: !d.fav && !!name && $("#ns")?.checked };
+      if (d.kind === "auto") Object.assign(body, { mode: "auto", block_min: S.settings.auto_block, max_hours: S.settings.auto_max_hours });
+      else if (d.kind === "time") body.end = timeToDate(d.time).toISOString();
+      else body.minutes = d.min;
+      b.disabled = true; b.innerHTML = '<span class="spin"></span>';
+      if (await act("start", body, (name || plate) + " is aangemeld")) {
+        const prefs = LS.get("park_pref", {}); prefs[plate] = { kind: d.kind, min: d.min, time: d.time }; LS.set("park_pref", prefs);
+        closeSheet(); render();
+      } else { b.disabled = false; b.textContent = "Aanmelden"; }
+      break;
+    }
+    case "ext":
+      b.innerHTML = '<span class="spin"></span>';
+      if (!(await act("extend", { action_id: id, minutes: Number(b.dataset.min) }, "Verlengd"))) render();
+      break;
+    case "ext-time":
+      openSheet(`<h3>Nieuwe eindtijd</h3><p class="sub">${esc(sess.name || sess.plate)} staat nu aangemeld tot ${hhmm(sess.end)}.</p>
+        <input class="in" id="xt" type="time" value="${timePlus((new Date(sess.end) - now()) / 60000 + 60)}">
+        <button class="big go" data-do="ext-time-go" data-sid="${esc(id)}">Opslaan</button><button class="big plain" data-do="close">Annuleren</button>`);
+      break;
+    case "ext-time-go": {
+      const t = $("#xt").value; if (!t) return;
+      b.disabled = true;
+      if (await act("extend", { action_id: b.dataset.sid, end: timeToDate(t).toISOString() }, "Eindtijd aangepast")) closeSheet();
+      else b.disabled = false;
+      break;
+    }
+    case "stop":
+      if (!b.classList.contains("arm")) {
+        b.classList.add("arm"); b.textContent = "Tik nog een keer om af te melden";
+        clearTimeout(armT); armT = setTimeout(render, 3500); return;
+      }
+      clearTimeout(armT); b.innerHTML = '<span class="spin"></span>';
+      if (!(await act("stop", { action_id: id }, (sess?.name || sess?.plate || "Bezoek") + " is afgemeld"))) render();
+      break;
+    case "auto":
+      await act("session_update", { action_id: id, mode: sess.mode === "auto" ? "fixed" : "auto", block_min: S.settings.auto_block, max_hours: S.settings.auto_max_hours },
+        sess.mode === "auto" ? "Automatisch verlengen staat uit" : "Wordt nu vanzelf verlengd");
+      break;
+    case "set": {
+      S.settings[b.dataset.key] = Number(b.dataset.val); settingsSheet();
+      try { await api("settings", S.settings); LS.set("park_state", S); } catch (err) { toast(err.message); }
+      break;
+    }
+    case "fav-del":
+      if (!b.classList.contains("arm")) { b.classList.add("arm"); b.textContent = "Zeker?"; return; }
+      if (await act("favorite", { op: "remove", plate: b.dataset.plate }, "Favoriet verwijderd")) settingsSheet();
+      break;
+    case "push-on": await enablePush(); if ($("#sheet").innerHTML) settingsSheet(); break;
+    case "push-later": LS.set("park_push_later", Date.now() + 7 * 864e5); render(); break;
+    case "push-test":
+      try { await api("push_test"); toast("Testmelding verstuurd"); } catch (err) { toast(err.message, 4500); }
+      break;
+    case "logout":
+      if (!b.classList.contains("arm")) { b.classList.add("arm"); b.textContent = "Zeker?"; return; }
+      try { await api("logout"); } catch {}
+      token = null; S = null; LS.del("park_token"); LS.del("park_state"); closeSheet(); render();
+      break;
+  }
+});
+
+// ---------- demo (alleen met ?demo in het adres) ----------
+function demoApi(action, d) {
+  const D = demoApi.s ??= {
+    now: null, owner_email: "demo@voorbeeld.nl", balance: 8.4, currency: "EUR", rate_per_hour: 2.04,
+    favorites: [{ plate: "H817TK", name: "Miki" }, { plate: "AB123C", name: "Mam" }, { plate: "KX44PL", name: "Schoonmaak" }],
+    sessions: [{ id: "1", plate: "H817TK", name: "Miki", start: new Date(Date.now() - 16 * 60000).toISOString(), end: new Date(Date.now() + 14 * 60000 + 20000).toISOString(), cost: 1.02, mode: "fixed", block_min: 30, max_until: null, planned: false, last_error: null }],
+    settings: { lead_min: 5, low_balance: 2, nudge_min: 60, auto_block: 30, auto_max_hours: 4 }, push: { public_key: "", subscribed: false },
+  };
+  if (action === "login") return Promise.resolve({ token: "demo" });
+  if (action === "start") D.sessions.push({ id: String(Date.now()), plate: d.plate, name: d.name || null, start: new Date().toISOString(), end: d.end || new Date(Date.now() + (d.minutes || d.block_min) * 60000).toISOString(), cost: null, mode: d.mode || "fixed", block_min: d.block_min || 30, max_until: d.mode === "auto" ? new Date(Date.now() + d.max_hours * 3600e3).toISOString() : null, planned: false, last_error: null });
+  const s = D.sessions.find((x) => x.id === d.action_id);
+  if (action === "extend" && s) s.end = d.end || new Date(new Date(s.end).getTime() + d.minutes * 60000).toISOString();
+  if (action === "stop") D.sessions = D.sessions.filter((x) => x.id !== d.action_id);
+  if (action === "session_update" && s) { s.mode = d.mode; s.max_until = d.mode === "auto" ? new Date(Date.now() + d.max_hours * 3600e3).toISOString() : null; }
+  if (action === "settings") D.settings = d;
+  return new Promise((r) => setTimeout(() => r(JSON.parse(JSON.stringify({ ...D, now: new Date().toISOString() }))), 250));
+}
+if (DEMO && !token) token = "demo";
+
+// ---------- start ----------
+if ("serviceWorker" in navigator && !DEMO) navigator.serviceWorker.register("sw.js").catch(() => {});
+render();
+refresh();
+setInterval(tickUI, 1000);
+setInterval(() => { if (!document.hidden && !$("#sheet").innerHTML) refresh(); }, 45000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
+</script>
+</body>
+</html>
