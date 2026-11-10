@@ -4,48 +4,52 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Parkeren</title>
-<meta name="theme-color" content="#F4F3EF" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#111315" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#1E4FB5">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Parkeren">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" type="image/png" href="icon-192.png">
 <style>
 :root{
   --bg:#F4F3EF; --card:#FFFFFF; --ink:#16181D; --muted:#6B7280; --line:#E4E2DA; --soft:#ECEAE3;
-  --go:#1F8A4C; --go-ink:#fff; --stop:#C8372D; --warn:#B86A00; --warn-bg:#FFF3DC; --plate:#F6C915;
+  --brand:#1E4FB5; --brand-ink:#fff; --accent:#F6C915; --accent-ink:#1B1600; --tint:#EEF3FD;
+  --go:#1E4FB5; --go-ink:#fff; --stop:#C8372D; --warn:#B86A00; --warn-bg:#FFF6CF; --plate:#F6C915;
   --r:18px;
 }
 @media (prefers-color-scheme: dark){
   :root{ --bg:#111315; --card:#1B1E22; --ink:#F2F2F0; --muted:#9AA0A6; --line:#2B2F35; --soft:#24282D;
-    --go:#2FA863; --stop:#E5574C; --warn:#F0A63A; --warn-bg:#33270F; }
+    --brand:#1E4FB5; --tint:#1A2540; --go:#2F66DB; --stop:#E5574C; --warn:#F0A63A; --warn-bg:#3A3110; }
 }
 *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
 html,body{margin:0; background:var(--bg); color:var(--ink);
   font:16px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
   -webkit-text-size-adjust:100%}
-body{min-height:100dvh; padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+body{min-height:100dvh; padding:0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+.top{background:var(--brand); color:#fff; padding-top:env(safe-area-inset-top); border-bottom:4px solid var(--accent)}
+.top .wrap{padding-bottom:0}
 button,input{font:inherit; color:inherit}
 button{cursor:pointer; border:0; background:none; padding:0}
 [hidden]{display:none!important}
 .wrap{max-width:520px; margin:0 auto; padding:14px 16px 40px}
 
-header{display:flex; align-items:center; gap:10px; padding:6px 0 14px}
+header{display:flex; align-items:center; gap:10px; padding:8px 0 14px}
+header .mark{width:34px; height:34px; border-radius:9px; background:var(--accent); color:var(--brand); display:grid; place-items:center; font-weight:800; font-size:21px}
 header h1{font-size:26px; font-weight:750; letter-spacing:-.02em; margin:0; flex:1}
 .pill{display:flex; flex-direction:column; align-items:flex-end; padding:7px 12px; border-radius:14px;
-  background:var(--card); border:1px solid var(--line); text-decoration:none; color:inherit; line-height:1.15}
+  background:var(--accent); text-decoration:none; color:var(--accent-ink); line-height:1.15}
 .pill b{font-size:16px; font-variant-numeric:tabular-nums}
-.pill small{font-size:11.5px; color:var(--muted)}
-.pill.low{background:var(--warn-bg); border-color:transparent}
-.pill.low small{color:var(--warn); font-weight:600}
-.icon-btn{width:42px; height:42px; border-radius:14px; background:var(--card); border:1px solid var(--line);
+.pill small{font-size:11.5px; color:var(--accent-ink); opacity:.75}
+.pill.low{background:#fff; color:#C8372D}
+.pill.low small{color:#C8372D; opacity:1; font-weight:650}
+.icon-btn{width:42px; height:42px; border-radius:14px; background:rgba(255,255,255,.16); color:#fff;
   display:grid; place-items:center}
 .icon-btn svg{width:21px; height:21px}
 
-h2{font-size:13px; font-weight:650; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:22px 4px 10px}
+h2{display:flex; justify-content:space-between; align-items:baseline; font-size:13px; font-weight:650; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:22px 4px 10px}
+.h2link{font-size:14px; font-weight:650; color:var(--go); text-transform:none; letter-spacing:0; padding:4px 0 4px 12px}
 .card{background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:16px}
 .card + .card{margin-top:12px}
 
@@ -71,7 +75,7 @@ h2{font-size:13px; font-weight:650; text-transform:uppercase; letter-spacing:.06
 .row{display:grid; grid-template-columns:repeat(4,1fr); gap:8px}
 .chip{height:46px; border-radius:13px; background:var(--soft); font-weight:650; font-size:15px; white-space:nowrap}
 .chip:active{transform:scale(.97)}
-.chip.on{background:var(--ink); color:var(--bg)}
+.chip.on{background:var(--brand); color:#fff}
 .big{width:100%; height:54px; border-radius:15px; font-size:17px; font-weight:700; margin-top:10px}
 .big.go{background:var(--go); color:var(--go-ink)}
 .big.stop{background:transparent; color:var(--stop); border:1.5px solid var(--stop)}
@@ -87,12 +91,13 @@ h2{font-size:13px; font-weight:650; text-transform:uppercase; letter-spacing:.06
 .fav .name{font-size:17px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .fav .hint{font-size:12.5px; color:var(--muted); margin-top:auto}
 .fav.busy{opacity:.55}
+.fav:not(.new):not(.busy){border-left:4px solid var(--brand)}
 .fav.new{border-style:dashed; justify-content:center; align-items:center; color:var(--muted); font-weight:650}
 .empty{color:var(--muted); font-size:15px; padding:6px 4px}
 
 .banner{background:var(--warn-bg); border-radius:var(--r); padding:14px 16px; font-size:14.5px; margin-bottom:12px}
 .banner b{display:block; margin-bottom:2px}
-.banner button{margin-top:10px; height:42px; padding:0 16px; border-radius:12px; background:var(--ink); color:var(--bg); font-weight:650}
+.banner button{margin-top:10px; height:42px; padding:0 16px; border-radius:12px; background:var(--brand); color:#fff; font-weight:650}
 
 .scrim{position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:flex-end; justify-content:center; z-index:10}
 .sheet{background:var(--bg); width:100%; max-width:520px; border-radius:24px 24px 0 0; padding:10px 18px calc(22px + env(safe-area-inset-bottom));
@@ -109,7 +114,7 @@ h2{font-size:13px; font-weight:650; text-transform:uppercase; letter-spacing:.06
 .sum{display:flex; justify-content:space-between; align-items:baseline; margin:16px 2px 0; font-size:15px; color:var(--muted)}
 .sum b{color:var(--ink); font-size:17px; font-variant-numeric:tabular-nums}
 .check{display:flex; align-items:center; gap:10px; margin:14px 2px 0; font-size:15px}
-.check input{width:22px; height:22px; accent-color:var(--go)}
+.check input{width:22px; height:22px; accent-color:var(--brand)}
 .set{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:13px 0; border-top:1px solid var(--line)}
 .set:first-of-type{border-top:0}
 .set .t{font-size:15.5px}
@@ -120,7 +125,7 @@ h2{font-size:13px; font-weight:650; text-transform:uppercase; letter-spacing:.06
 .mini{height:38px; padding:0 14px; border-radius:11px; background:var(--soft); font-weight:650; font-size:14.5px}
 .mini.danger{color:var(--stop)}
 
-.login{max-width:420px; margin:8dvh auto 0; padding:0 22px}
+.login{max-width:420px; margin:0 auto; padding:calc(8dvh + env(safe-area-inset-top)) 22px 0}
 .login h1{font-size:30px; letter-spacing:-.02em; margin:18px 0 6px}
 .login p{color:var(--muted); margin:0 0 8px}
 .logo{width:68px; height:68px; border-radius:18px}
@@ -208,25 +213,27 @@ async function act(action, data, okMsg) {
 function render() {
   const app = $("#app");
   if (!token) return (app.innerHTML = loginView());
-  if (!S) return (app.innerHTML = `<div class="wrap"><header><h1>Parkeren</h1></header><p class="empty"><span class="spin"></span> Even ophalen…</p></div>`);
+  if (!S) return (app.innerHTML = `<div class="top"><div class="wrap"><header><span class="mark">P</span><h1>Parkeren</h1></header></div></div><div class="wrap"><p class="empty"><span class="spin"></span> Even ophalen…</p></div>`);
   const low = S.balance !== null && S.balance < (S.settings?.low_balance ?? 2);
   const buys = S.balance !== null && S.rate_per_hour ? (S.balance / S.rate_per_hour) * 60 : null;
   const activePlates = new Set(S.sessions.map((s) => s.plate));
-  app.innerHTML = `<div class="wrap">
+  app.innerHTML = `<div class="top"><div class="wrap">
     <header>
-      <h1>Parkeren</h1>
+      <span class="mark">P</span><h1>Parkeren</h1>
       ${S.balance !== null ? `<a class="pill ${low ? "low" : ""}" href="https://mijn.2park.nl/" target="_blank" rel="noopener" aria-label="Saldo, tik om op te waarderen in 2Park">
         <b>${euro(S.balance)}</b><small>${low ? "opwaarderen" : buys ? "≈ " + dur(buys) + " saldo" : "saldo"}</small></a>` : ""}
       <button class="icon-btn" data-do="settings" aria-label="Instellingen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></button>
     </header>
+  </div></div>
+  <div class="wrap">
     ${pushBanner()}
     ${S.sessions.length ? `<h2>Nu aangemeld</h2>` + S.sessions.map(sessionCard).join("") : ""}
-    <h2>Bezoek aanmelden</h2>
+    <h2>Bezoek aanmelden <button class="h2link" data-do="favs">Beheren</button></h2>
     <div class="grid">
       ${S.favorites.map((f) => favTile(f, activePlates.has(f.plate))).join("")}
       <button class="fav new" data-do="new">+ Ander kenteken</button>
     </div>
-    ${!S.favorites.length ? `<p class="empty">Nog geen favorieten. Meld een kenteken aan en bewaar het met een naam, dan staat het hier de volgende keer klaar.</p>` : ""}
+    ${!S.favorites.length ? `<p class="empty">Nog geen vaste bezoekers. Voeg ze toe via “Beheren”, dan meld je ze voortaan met één tik aan.</p>` : ""}
     <p class="stale">${offline ? "Geen verbinding: dit is de laatst bekende stand. " : ""}<button class="link" data-do="refresh" style="padding:0">Vernieuwen</button></p>
   </div>`;
   tickUI();
@@ -369,14 +376,26 @@ function settingsSheet() {
   openSheet(`<h3>Instellingen</h3><p class="sub">${esc(S.owner_email || "")}</p>
     <div class="set"><div class="t">Meldingen<small>${pushOn ? "Staan aan op dit apparaat" : ps === "unsupported" ? (isIOS && !standalone ? "Zet de app eerst op je beginscherm" : "Niet beschikbaar in deze browser") : ps === "denied" ? "Geblokkeerd in de iPhone-instellingen" : "Staan nog uit"}</small></div>
       ${pushOn ? `<button class="mini" data-do="push-test">Test</button>` : ps === "default" || (ps === "granted" && !S.push?.subscribed) ? `<button class="mini" data-do="push-on">Aanzetten</button>` : ""}</div>
-    <div class="set"><div class="t">Herinnering<small>minuten voor het einde</small></div>${seg("lead_min", [[3, "3"], [5, "5"], [10, "10"], [15, "15"]])}</div>
+    <div class="set"><div class="t">Eerste herinnering<small>minuten voor het einde, plus altijd een laatste bij 1 minuut</small></div>${seg("lead_min", [[3, "3"], [5, "5"], [10, "10"], [15, "15"]])}</div>
     <div class="set"><div class="t">Saldo-waarschuwing<small>melding als het saldo lager is</small></div>${seg("low_balance", [[2, "€ 2"], [5, "€ 5"], [10, "€ 10"]])}</div>
     <div class="set"><div class="t">Automatisch verlengen<small>per blok van</small></div>${seg("auto_block", [[10, "10 min"], [30, "30 min"], [60, "1 uur"]])}</div>
     <div class="set"><div class="t">Maximum<small>daarna stopt verlengen vanzelf</small></div>${seg("auto_max_hours", [[2, "2 u"], [4, "4 u"], [8, "8 u"]])}</div>
     <div class="set"><div class="t">“Staat nog aangemeld”<small>seintje bij automatisch verlengen</small></div>${seg("nudge_min", [[30, "30 min"], [60, "1 uur"], [120, "2 uur"]])}</div>
-    ${S.favorites.length ? `<label class="f" style="margin-top:20px">Favorieten</label>` + S.favorites.map((f) => `<div class="set"><div class="t">${esc(f.name || f.plate)}<small>${fmtPlate(f.plate)}</small></div><button class="mini danger" data-do="fav-del" data-plate="${esc(f.plate)}">Verwijderen</button></div>`).join("") : ""}
+    <div class="set"><div class="t">Kentekens en personen<small>${S.favorites.length} bewaard</small></div><button class="mini" data-do="favs">Beheren</button></div>
     <div class="set"><div class="t">2Park<small>opwaarderen en parkeerhistorie</small></div><a class="mini" style="display:grid;place-items:center;text-decoration:none" href="https://mijn.2park.nl/" target="_blank" rel="noopener">Openen</a></div>
     <div class="set"><div class="t">Account</div><button class="mini danger" data-do="logout">Uitloggen</button></div>
+    <button class="big plain" data-do="close">Klaar</button>`);
+}
+
+function favSheet(keep) {
+  const pn = keep ? ($("#fn")?.value ?? "") : "", pp = keep ? ($("#fp")?.value ?? "") : "";
+  openSheet(`<h3>Kentekens en personen</h3><p class="sub">Deze lijst is dezelfde als je favorieten in 2Park.</p>
+    ${S.favorites.length ? S.favorites.map((f) => `<div class="set"><div class="t">${esc(f.name || f.plate)}<small><span class="plate" style="margin-top:4px"><span>${fmtPlate(f.plate)}</span></span></small></div><button class="mini danger" data-do="fav-del" data-plate="${esc(f.plate)}">Verwijderen</button></div>`).join("") : `<p class="empty">Nog niemand toegevoegd.</p>`}
+    <label class="f" for="fn" style="margin-top:20px">Nieuwe persoon</label>
+    <input class="in" id="fn" maxlength="40" placeholder="Naam, bijv. Oma" value="${esc(pn)}">
+    <label class="f" for="fp">Kenteken</label>
+    <input class="in plate-in" id="fp" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false" maxlength="10" placeholder="AB123C" value="${esc(pp)}">
+    <button class="big go" data-do="fav-add">Toevoegen</button>
     <button class="big plain" data-do="close">Klaar</button>`);
 }
 
@@ -416,7 +435,7 @@ document.addEventListener("submit", async (e) => {
 
 document.addEventListener("input", (e) => {
   if (e.target.id === "et" && draft) { draft.time = e.target.value || draft.time; drawStartKeepFocus(); }
-  if (e.target.id === "np") e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "");
+  if (e.target.id === "np" || e.target.id === "fp") e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "");
 });
 function drawStartKeepFocus() {
   const sum = $(".sheet .sum"); if (!sum) return;
@@ -490,8 +509,18 @@ document.addEventListener("click", async (e) => {
     }
     case "fav-del":
       if (!b.classList.contains("arm")) { b.classList.add("arm"); b.textContent = "Zeker?"; return; }
-      if (await act("favorite", { op: "remove", plate: b.dataset.plate }, "Favoriet verwijderd")) settingsSheet();
+      if (await act("favorite", { op: "remove", plate: b.dataset.plate }, "Verwijderd")) favSheet(true);
       break;
+    case "favs": favSheet(false); break;
+    case "fav-add": {
+      const name = ($("#fn")?.value || "").trim(), plate = ($("#fp")?.value || "").replace(/[^A-Z0-9]/gi, "");
+      if (!name) return toast("Vul een naam in");
+      if (plate.length < 4) return toast("Vul een kenteken in");
+      b.disabled = true; b.innerHTML = '<span class="spin"></span>';
+      if (await act("favorite", { op: "add", plate, name }, name + " is toegevoegd")) favSheet(false);
+      else { b.disabled = false; b.textContent = "Toevoegen"; }
+      break;
+    }
     case "push-on": await enablePush(); if ($("#sheet").innerHTML) settingsSheet(); break;
     case "push-later": LS.set("park_push_later", Date.now() + 7 * 864e5); render(); break;
     case "push-test":
@@ -520,6 +549,7 @@ function demoApi(action, d) {
   if (action === "stop") D.sessions = D.sessions.filter((x) => x.id !== d.action_id);
   if (action === "session_update" && s) { s.mode = d.mode; s.max_until = d.mode === "auto" ? new Date(Date.now() + d.max_hours * 3600e3).toISOString() : null; }
   if (action === "settings") D.settings = d;
+  if (action === "favorite") { if (d.op === "remove") D.favorites = D.favorites.filter((f) => f.plate !== d.plate); else D.favorites.push({ plate: d.plate.toUpperCase(), name: d.name }); }
   return new Promise((r) => setTimeout(() => r(JSON.parse(JSON.stringify({ ...D, now: new Date().toISOString() }))), 250));
 }
 if (DEMO && !token) token = "demo";

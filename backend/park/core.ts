@@ -16,6 +16,7 @@ export interface SessionRow {
   block_min: number;
   max_until: string | null;
   reminded_for: string | null;
+  reminded1_for: string | null;
   nudged_at: string | null;
   state: "active" | "ended";
   stopped_by_app: boolean;
@@ -63,6 +64,7 @@ export const DEFAULTS = { lead_min: 5, low_balance: 2, nudge_min: 60, auto_block
 type Settings = typeof DEFAULTS;
 
 const MIN = 60_000;
+const FINAL_MIN = 1.5; // de klok tikt per minuut: dit valt 0,5 tot 1,5 min voor het einde
 const euro = (n: number) => "€ " + n.toFixed(2).replace(".", ",");
 
 export class UserError extends Error {
@@ -129,6 +131,7 @@ async function sync(ctx: Ctx, snap: Snapshot, quiet = false): Promise<SessionRow
       block_min: prev?.block_min ?? st.auto_block,
       max_until: prev?.max_until ?? null,
       reminded_for: prev?.reminded_for ?? null,
+      reminded1_for: prev?.reminded1_for ?? null,
       nudged_at: prev?.nudged_at ?? null,
       state: "active",
       stopped_by_app: false,
@@ -293,6 +296,7 @@ async function startAction(ctx: Ctx, device: DeviceRow, body: Json): Promise<Jso
       block_min: block,
       max_until: maxUntil ? maxUntil.toISOString() : null,
       reminded_for: null,
+      reminded1_for: null,
       nudged_at: null,
       state: "active",
       stopped_by_app: false,
@@ -332,7 +336,7 @@ async function extendAction(ctx: Ctx, device: DeviceRow, body: Json): Promise<Js
     }
     if (until.getTime() < ctx.now().getTime() + MIN) throw new UserError("De eindtijd moet in de toekomst liggen");
     await tp.extend(id, until);
-    await ctx.store.sessionUpsert({ action_id: id, reminded_for: null, last_error: null });
+    await ctx.store.sessionUpsert({ action_id: id, reminded_for: null, reminded1_for: null, last_error: null });
     const snap = await tp.snapshot();
     await ctx.store.log("extend", { id, until: until.toISOString() });
     return await buildState(ctx, snap, await sync(ctx, snap, true), device);
@@ -373,6 +377,7 @@ async function sessionUpdate(ctx: Ctx, device: DeviceRow, body: Json): Promise<J
     block_min: Math.min(240, Math.max(10, Number(body.block_min) || st.auto_block)),
     max_until: auto ? new Date(ctx.now().getTime() + hours * 60 * MIN).toISOString() : null,
     reminded_for: null,
+    reminded1_for: null,
     nudged_at: ctx.now().toISOString(),
   });
   return await stateAction(ctx, device);
@@ -497,6 +502,7 @@ export async function tick(ctx: Ctx): Promise<Json> {
             action_id: r.action_id,
             end_at: new Date(target).toISOString(),
             reminded_for: null,
+            reminded1_for: null,
             last_error: null,
           });
           did.push(`verlengd ${r.plate} tot ${hhmm(new Date(target))}`);
@@ -518,10 +524,19 @@ export async function tick(ctx: Ctx): Promise<Json> {
       }
       if (extended) continue;
 
-      if (left <= lead && left > -1 && r.reminded_for !== r.end_at) {
-        const capped = r.mode === "auto";
+      const capped = r.mode === "auto";
+      if (left <= FINAL_MIN && left > -1 && r.reminded1_for !== r.end_at) {
+        // laatste waarschuwing, ongeveer 1 minuut van tevoren
         await notify(ctx, {
-          title: `Nog ${Math.max(1, Math.round(left))} min: ${who}`,
+          title: `Nog 1 min: ${who}`,
+          body: `Loopt af om ${hhmm(end)}. Tik nu om te verlengen, anders staat de auto zo onaangemeld.`,
+          tag: `rem-${r.action_id}`,
+        });
+        await ctx.store.sessionUpsert({ action_id: r.action_id, reminded1_for: r.end_at, reminded_for: r.end_at });
+        did.push(`laatste herinnering ${r.plate}`);
+      } else if (left <= lead && left > FINAL_MIN && r.reminded_for !== r.end_at) {
+        await notify(ctx, {
+          title: `Nog ${Math.max(2, Math.round(left))} min: ${who}`,
           body: capped
             ? `Maximum bereikt, stopt om ${hhmm(end)}. Tik om te verlengen of af te melden.`
             : `Aangemeld tot ${hhmm(end)}. Tik om te verlengen of af te melden.`,

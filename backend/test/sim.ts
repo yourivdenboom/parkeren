@@ -204,6 +204,7 @@ await advance(1);
 ok(titles().join() === "Nog 5 min: Miki", "25 min: herinnering 5 min van tevoren");
 await advance(2);
 ok(pushes.length === 1, "geen dubbele herinnering");
+{ const keep = clock; const n0 = pushes.length; /* aparte controle hieronder */ void keep; void n0; }
 r = await call({ action: "extend", token, action_id: s1.id, minutes: 10 });
 ok(r.json.sessions[0].end === "2026-11-10T14:40:00.000Z", "+10 min verlengd");
 await advance(8);
@@ -218,7 +219,24 @@ pushes.length = 0;
 r = await call({ action: "start", token, plate: "AB123C", minutes: 10 });
 ok(r.status === 200, "Mam 10 min");
 await advance(12);
-ok(titles().join("|") === "Nog 5 min: Mam|Mam is afgemeld", "herinnering en daarna 'is afgemeld'");
+ok(titles().join("|") === "Nog 5 min: Mam|Nog 1 min: Mam|Mam is afgemeld", "5 min, 1 min en daarna 'is afgemeld'");
+
+console.log("\n5b. Verlengen na de 5-minutenmelding: geen 1-minuutmelding voor de oude tijd, wel beide voor de nieuwe");
+pushes.length = 0;
+r = await call({ action: "start", token, plate: "AB123C", minutes: 20 });
+await advance(16);
+r = await call({ action: "extend", token, action_id: r.json.sessions[0].id, minutes: 10 });
+await advance(4);
+ok(titles().join("|") === "Nog 5 min: Mam", "alleen de eerste melding voor de oude eindtijd");
+await advance(9);
+ok(titles().join("|") === "Nog 5 min: Mam|Nog 5 min: Mam|Nog 1 min: Mam", "na verlengen opnieuw 5 min en 1 min");
+r = await call({ action: "state", token });
+await call({ action: "stop", token, action_id: r.json.sessions[0].id });
+pushes.length = 0;
+r = await call({ action: "start", token, plate: "AB123C", minutes: 2 });
+await advance(1);
+ok(titles().filter((x) => x.startsWith("Nog ")).join("|") === "Nog 1 min: Mam", "heel korte actie: alleen de 1-minuutmelding");
+await advance(3);
 
 console.log("\n6. Eindtijd zelf kiezen + nieuw kenteken als favoriet");
 pushes.length = 0;
