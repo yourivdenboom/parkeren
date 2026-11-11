@@ -130,7 +130,15 @@ const store: Store = {
   cfgSet: (k, v) => (cfg.set(k, structuredClone(v)), Promise.resolve()),
   secretGet: (n) => Promise.resolve(secrets.get(n) ?? null),
   secretSet: (n, v) => (secrets.set(n, v), Promise.resolve()),
-  sessionsActive: () => Promise.resolve([...sessions.values()].filter((s) => s.state === "active").map((s) => ({ ...s }))),
+  sessionsActive: () =>
+    Promise.resolve([...sessions.values()].filter((s) => s.state === "active").map((s) => {
+      // net als de echte database: tijden komen terug als "...+00:00" in plaats van "...000Z"
+      const o: Json = { ...s };
+      for (const k of ["started_at", "end_at", "max_until", "reminded_for", "reminded1_for", "nudged_at"]) {
+        if (o[k]) o[k] = new Date(o[k]).toISOString().replace(".000Z", "+00:00");
+      }
+      return o;
+    })),
   sessionUpsert: (row) => {
     const prev = sessions.get(row.action_id);
     if (!prev && !row.plate) return Promise.resolve();

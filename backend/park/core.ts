@@ -65,6 +65,9 @@ type Settings = typeof DEFAULTS;
 
 const MIN = 60_000;
 const FINAL_MIN = 1.5; // de klok tikt per minuut: dit valt 0,5 tot 1,5 min voor het einde
+// De database geeft tijden in een andere schrijfwijze terug dan wij ze opslaan: vergelijk dus het moment zelf.
+const sameT = (a: string | null | undefined, b: string | null | undefined) =>
+  !!a && !!b && new Date(a).getTime() === new Date(b).getTime();
 const euro = (n: number) => "€ " + n.toFixed(2).replace(".", ",");
 
 export class UserError extends Error {
@@ -140,7 +143,7 @@ async function sync(ctx: Ctx, snap: Snapshot, quiet = false): Promise<SessionRow
       source: prev?.source ?? "extern",
       last_error: prev?.last_error ?? null,
     };
-    if (!prev || prev.end_at !== endIso || prev.cost !== row.cost || prev.name !== row.name) {
+    if (!prev || !sameT(prev.end_at, endIso) || prev.cost !== row.cost || prev.name !== row.name) {
       await ctx.store.sessionUpsert(row);
     }
     out.push(row);
@@ -450,7 +453,7 @@ export async function tick(ctx: Ctx): Promise<Json> {
       // Kan 2Park niet bereikt worden terwijl er iets afloopt? Dan in elk geval waarschuwen.
       for (const r of local) {
         const left = (new Date(r.end_at ?? 0).getTime() - now.getTime()) / MIN;
-        if (left <= st.lead_min && left > -1 && r.reminded_for !== r.end_at) {
+        if (left <= st.lead_min && left > -1 && !sameT(r.reminded_for, r.end_at)) {
           await notify(ctx, {
             title: `Nog ${Math.max(1, Math.round(left))} min: ${r.name || r.plate}`,
             body: `Loopt af om ${hhmm(new Date(r.end_at!))}. Let op: 2Park is nu niet bereikbaar (${friendly(e)}).`,
@@ -511,7 +514,7 @@ export async function tick(ctx: Ctx): Promise<Json> {
         } catch (e) {
           const msg = friendly(e);
           await ctx.store.log("auto_extend_fail", { id: r.action_id, error: msg });
-          if (r.last_error !== msg || r.reminded_for !== r.end_at) {
+          if (r.last_error !== msg || !sameT(r.reminded_for, r.end_at)) {
             await notify(ctx, {
               title: `Verlengen mislukt: ${who}`,
               body: `${msg}. De parkeertijd loopt af om ${hhmm(end)}. Tik om het zelf te regelen.`,
@@ -525,7 +528,7 @@ export async function tick(ctx: Ctx): Promise<Json> {
       if (extended) continue;
 
       const capped = r.mode === "auto";
-      if (left <= FINAL_MIN && left > -1 && r.reminded1_for !== r.end_at) {
+      if (left <= FINAL_MIN && left > -1 && !sameT(r.reminded1_for, r.end_at)) {
         // laatste waarschuwing, ongeveer 1 minuut van tevoren
         await notify(ctx, {
           title: `Nog 1 min: ${who}`,
@@ -534,7 +537,7 @@ export async function tick(ctx: Ctx): Promise<Json> {
         });
         await ctx.store.sessionUpsert({ action_id: r.action_id, reminded1_for: r.end_at, reminded_for: r.end_at });
         did.push(`laatste herinnering ${r.plate}`);
-      } else if (left <= lead && left > FINAL_MIN && r.reminded_for !== r.end_at) {
+      } else if (left <= lead && left > FINAL_MIN && !sameT(r.reminded_for, r.end_at)) {
         await notify(ctx, {
           title: `Nog ${Math.max(2, Math.round(left))} min: ${who}`,
           body: capped
