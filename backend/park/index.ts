@@ -32,6 +32,10 @@ const store: Store = {
   async sessionsActive() {
     return must(await db.from("park_sessions").select("*").eq("state", "active")) as SessionRow[];
   },
+  async sessionPlate(actionId) {
+    const d = must(await db.from("park_sessions").select("plate").eq("action_id", actionId).maybeSingle());
+    return d ? (d as Json).plate : null;
+  },
   async sessionUpsert(row) {
     if (row.plate) must(await db.from("park_sessions").upsert(row));
     else must(await db.from("park_sessions").update(row).eq("action_id", row.action_id));

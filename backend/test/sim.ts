@@ -22,6 +22,7 @@ const fake = {
   calls: [] as string[],
   down: false,
   extendFails: "",
+  stopCascades: true,
 };
 const OK = (data: Json = {}, minor = "SUCCESS") => ({ status: { code: { major: "OK", minor } }, data });
 const NOK = (minor: string, message = "") => ({ status: { code: { major: "NOK", minor }, message }, data: {} });
@@ -42,8 +43,11 @@ function fakeFetch(url: string, init: RequestInit): Promise<Response> {
     return reply(OK({}, "AUTHENTICATED"));
   }
   if (!fake.cookie || !cookie.includes(fake.cookie)) return reply(NOK("NOT_AUTHENTICATED", "Niet ingelogd"));
-  for (const a of fake.actions) if (a.end <= clock) a.state = "ENDED";
-  const live = fake.actions.filter((a) => a.state === "ACTIVE");
+  for (const a of fake.actions) {
+    if (a.state === "STOPPED") continue;
+    a.state = a.end <= clock ? "ENDED" : a.start > clock ? "PLANNED" : "ACTIVE";
+  }
+  const live = fake.actions.filter((a) => a.state === "ACTIVE" || a.state === "PLANNED");
   const cost = (a: { start: Date; end: Date }) => ((a.end.getTime() - a.start.getTime()) / 3.6e6) * fake.rate;
   switch (ep) {
     case "get_categories.json":
@@ -100,12 +104,16 @@ function fakeFetch(url: string, init: RequestInit): Promise<Response> {
     case "extend_action.json": {
       if (fake.extendFails) return reply(NOK("ERROR", fake.extendFails));
       const a = fake.actions.find((x) => String(x.id) === form.get("action_id"))!;
-      a.end = parseLocal(form.get("VALID_UNTIL")!)!;
+      if (fake.actions.some((x) => x.plate === a.plate && x.state !== "STOPPED" && x.start > a.end && x.start.getTime() - a.end.getTime() < 5000)) {
+        return reply(NOK("ERROR", "Deze actie is al verlengd"));
+      }
+      fake.actions.push({ id: fake.nextId++, plate: a.plate, start: new Date(a.end.getTime() + 1000), end: parseLocal(form.get("VALID_UNTIL")!)!, state: "PLANNED" });
       return reply(OK());
     }
     case "stop_action.json": {
       const a = fake.actions.find((x) => String(x.id) === form.get("action_id"))!;
       a.state = "STOPPED";
+      if (fake.stopCascades) for (const x of fake.actions) if (x.plate === a.plate && x.start > a.start) x.state = "STOPPED";
       return reply(OK());
     }
     case "handle_favorite.json": {
@@ -139,6 +147,7 @@ const store: Store = {
       }
       return o;
     })),
+  sessionPlate: (id) => Promise.resolve(sessions.get(id)?.plate ?? null),
   sessionUpsert: (row) => {
     const prev = sessions.get(row.action_id);
     if (!prev && !row.plate) return Promise.resolve();
@@ -262,7 +271,7 @@ r = await call({ action: "start", token, plate: "H817TK", mode: "auto", block_mi
 const s2 = r.json.sessions[0];
 ok(s2.mode === "auto" && new Date(s2.end).getTime() - clock.getTime() === 600_000, "eerste blok 10 min");
 await advance(8);
-ok(fake.actions.at(-1)!.end.getTime() - new Date(s2.start).getTime() === 20 * 60_000, "automatisch verlengd naar 20 min");
+ok(fake.actions.at(-1)!.end.getTime() - new Date(s2.start).getTime() === 20 * 60_000, "automatisch verlengd naar 20 min (als nieuwe actie erachter)");
 ok(pushes.length === 0, "stil verlengd, geen melding");
 await advance(10);
 ok(fake.actions.at(-1)!.end.getTime() - new Date(s2.start).getTime() === 30 * 60_000, "verlengd tot het maximum (30 min)");
@@ -272,6 +281,35 @@ ok(pushes.find((p) => p.title.startsWith("Nog "))!.body.includes("Maximum bereik
 await advance(6);
 ok(fake.actions.at(-1)!.end.getTime() - new Date(s2.start).getTime() === 30 * 60_000, "niet voorbij het maximum verlengd");
 ok(titles().at(-1) === "Miki is afgemeld", "daarna afgemeld-melding");
+
+console.log("\n7b. Zoals bij jou: per 10 min verlengen, ruim een uur lang");
+pushes.length = 0;
+r = await call({ action: "start", token, plate: "H817TK", mode: "auto", block_min: 10, max_hours: 4 });
+const s3 = r.json.sessions[0];
+const before7b = fake.actions.length;
+await advance(65);
+r = await call({ action: "state", token });
+ok(r.json.sessions.length === 1 && r.json.sessions[0].mode === "auto", "na 65 min nog steeds één aanmelding, nog op automatisch");
+ok(fake.actions.length - before7b >= 6, `in die tijd ${fake.actions.length - before7b} keer verlengd`);
+ok(new Date(r.json.sessions[0].end).getTime() > clock.getTime(), "eindtijd ligt nog in de toekomst");
+ok(r.json.sessions[0].start === s3.start, "begintijd blijft de oorspronkelijke");
+ok(Math.abs(r.json.sessions[0].cost - ((new Date(r.json.sessions[0].end).getTime() - new Date(s3.start).getTime()) / 3.6e6) * 2.04) < 0.08, "kosten zijn het totaal van alle stukken");
+ok(!titles().some((x) => x.includes("afgemeld") || x.startsWith("Nog ")), "geen valse 'afgemeld'- of afloop-meldingen tussendoor");
+ok(titles().filter((x) => x === "Miki staat nog aangemeld").length === 1, "wel het seintje na een uur");
+r = await call({ action: "extend", token, action_id: s3.id, plate: "H817TK", minutes: 30 });
+ok(r.status === 200, "handmatig verlengen werkt ook met een oud actienummer");
+fake.stopCascades = false;
+r = await call({ action: "stop", token, action_id: r.json.sessions[0].id, plate: "H817TK" });
+ok(r.status === 200 && r.json.sessions.length === 0, "afmelden stopt de hele keten");
+ok(!fake.actions.some((a) => a.plate === "H817TK" && (a.state === "ACTIVE" || a.state === "PLANNED")), "bij 2Park loopt er niets meer voor dit kenteken");
+fake.stopCascades = true;
+await advance(5);
+ok(!titles().some((x) => x.includes("afgemeld")), "na zelf afmelden geen melding");
+r = await call({ action: "start", token, plate: "AB123C", minutes: 20 });
+r = await call({ action: "extend", token, action_id: r.json.sessions[0].id, minutes: -5 });
+ok(r.status === 400, "inkorten wordt netjes geweigerd");
+r = await call({ action: "state", token });
+await call({ action: "stop", token, action_id: r.json.sessions[0].id });
 
 console.log("\n8. 'Staat nog aangemeld'-check en mislukte verlenging");
 pushes.length = 0;

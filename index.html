@@ -476,7 +476,7 @@ document.addEventListener("click", async (e) => {
     }
     case "ext":
       b.innerHTML = '<span class="spin"></span>';
-      if (!(await act("extend", { action_id: id, minutes: Number(b.dataset.min) }, "Verlengd"))) render();
+      if (!(await act("extend", { action_id: id, plate: sess?.plate, minutes: Number(b.dataset.min) }, "Verlengd"))) render();
       break;
     case "ext-time":
       openSheet(`<h3>Nieuwe eindtijd</h3><p class="sub">${esc(sess.name || sess.plate)} staat nu aangemeld tot ${hhmm(sess.end)}.</p>
@@ -486,7 +486,7 @@ document.addEventListener("click", async (e) => {
     case "ext-time-go": {
       const t = $("#xt").value; if (!t) return;
       b.disabled = true;
-      if (await act("extend", { action_id: b.dataset.sid, end: timeToDate(t).toISOString() }, "Eindtijd aangepast")) closeSheet();
+      if (await act("extend", { action_id: b.dataset.sid, plate: S.sessions.find((x) => x.id === b.dataset.sid)?.plate, end: timeToDate(t).toISOString() }, "Eindtijd aangepast")) closeSheet();
       else b.disabled = false;
       break;
     }
@@ -496,10 +496,10 @@ document.addEventListener("click", async (e) => {
         clearTimeout(armT); armT = setTimeout(render, 3500); return;
       }
       clearTimeout(armT); b.innerHTML = '<span class="spin"></span>';
-      if (!(await act("stop", { action_id: id }, (sess?.name || sess?.plate || "Bezoek") + " is afgemeld"))) render();
+      if (!(await act("stop", { action_id: id, plate: sess?.plate }, (sess?.name || sess?.plate || "Bezoek") + " is afgemeld"))) render();
       break;
     case "auto":
-      await act("session_update", { action_id: id, mode: sess.mode === "auto" ? "fixed" : "auto", block_min: S.settings.auto_block, max_hours: S.settings.auto_max_hours },
+      await act("session_update", { action_id: id, plate: sess?.plate, mode: sess.mode === "auto" ? "fixed" : "auto", block_min: S.settings.auto_block, max_hours: S.settings.auto_max_hours },
         sess.mode === "auto" ? "Automatisch verlengen staat uit" : "Wordt nu vanzelf verlengd");
       break;
     case "set": {

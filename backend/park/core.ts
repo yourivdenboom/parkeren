@@ -24,6 +24,8 @@ export interface SessionRow {
   cost: number | null;
   source: string;
   last_error: string | null;
+  /** kosten per onderliggende 2Park-actie (een verlenging is bij 2Park een nieuwe, aansluitende actie) */
+  parts: Record<string, number> | null;
 }
 export interface DeviceRow {
   id: string;
@@ -37,6 +39,8 @@ export interface Store {
   secretGet(name: string): Promise<string | null>;
   secretSet(name: string, value: string): Promise<void>;
   sessionsActive(): Promise<SessionRow[]>;
+  /** kenteken bij een (mogelijk al afgesloten) actienummer */
+  sessionPlate(actionId: string): Promise<string | null>;
   sessionUpsert(row: Partial<SessionRow> & { action_id: string }): Promise<void>;
   deviceAdd(tokenHash: string, label: string | null): Promise<void>;
   deviceByHash(tokenHash: string): Promise<DeviceRow | null>;
@@ -99,7 +103,44 @@ async function closePark(ctx: Ctx, tp: TwoPark): Promise<void> {
 }
 
 const isLive = (a: Action, now: Date) =>
-  a.end.getTime() > now.getTime() && !/STOP|END|CANCEL|EXPIRE|FINISH|CLOSED/i.test(a.state);
+  a.end.getTime() > now.getTime() && !/^(STOPPED|ENDED|CANCELL?ED|EXPIRED|FINISHED|CLOSED|INACTIVE)$/i.test(a.state);
+
+/**
+ * 2Park verlengt niet de bestaande parkeeractie, maar maakt er een nieuwe achteraan vast.
+ * Voor de gebruiker is dat één doorlopende aanmelding: een "keten" per kenteken.
+ */
+export interface Chain {
+  id: string; // eerste nog lopende actie
+  lastId: string; // laatste actie: die moet je verlengen
+  ids: string[];
+  plate: string;
+  name: string | null;
+  start: Date;
+  end: Date;
+  actions: Action[];
+}
+const GAP = 2 * MIN;
+function chains(snap: Snapshot, now: Date): Chain[] {
+  const live = snap.actions.filter((a) => isLive(a, now)).sort((a, b) => a.start.getTime() - b.start.getTime());
+  const out: Chain[] = [];
+  for (const a of live) {
+    const c = out.find((x) => x.plate === a.plate && a.start.getTime() <= x.end.getTime() + GAP);
+    if (c) {
+      c.ids.push(a.id);
+      c.actions.push(a);
+      if (a.end.getTime() >= c.end.getTime()) {
+        c.end = a.end;
+        c.lastId = a.id;
+      }
+      c.name = c.name ?? a.name;
+    } else {
+      out.push({ id: a.id, lastId: a.id, ids: [a.id], plate: a.plate, name: a.name, start: a.start, end: a.end, actions: [a] });
+    }
+  }
+  return out;
+}
+const findChain = (cs: Chain[], id: string, plate?: string | null) =>
+  cs.find((c) => c.ids.includes(id)) ?? (plate ? cs.find((c) => c.plate === normPlate(plate)) : undefined);
 
 async function notify(ctx: Ctx, msg: PushMsg): Promise<void> {
   const devs = (await ctx.store.devices()).filter((d) => d.push);
@@ -116,19 +157,33 @@ async function notify(ctx: Ctx, msg: PushMsg): Promise<void> {
 async function sync(ctx: Ctx, snap: Snapshot, quiet = false): Promise<SessionRow[]> {
   const now = ctx.now();
   const local = await ctx.store.sessionsActive();
-  const byId = new Map(local.map((r) => [r.action_id, r]));
-  const live = snap.actions.filter((a) => isLive(a, now));
+  const cs = chains(snap, now);
   const out: SessionRow[] = [];
   const st = await settings(ctx);
+  const used = new Set<string>();
 
-  for (const a of live) {
-    const prev = byId.get(a.id);
-    const endIso = a.end.toISOString();
+  for (const c of cs) {
+    // dezelfde aanmelding terugvinden: op actienummer, of op kenteken als de keten is doorgeschoven
+    const prev = local.find((r) => r.action_id === c.id) ??
+      local.find((r) => c.ids.includes(r.action_id)) ??
+      local.find((r) =>
+        r.plate === c.plate && !used.has(r.action_id) && !!r.end_at &&
+        c.start.getTime() <= new Date(r.end_at).getTime() + GAP
+      );
+    if (prev) used.add(prev.action_id);
+    const parts: Record<string, number> = { ...(prev?.parts ?? {}) };
+    for (const a of c.actions) if (a.cost !== null) parts[a.id] = a.cost;
+    const costs = Object.values(parts);
+    const cost = costs.length ? Math.round(costs.reduce((x, y) => x + y, 0) * 100) / 100 : null;
+    const startIso = prev?.started_at && new Date(prev.started_at).getTime() < c.start.getTime()
+      ? new Date(prev.started_at).toISOString()
+      : c.start.toISOString();
+    const endIso = c.end.toISOString();
     const row: SessionRow = {
-      action_id: a.id,
-      plate: a.plate,
-      name: a.name ?? prev?.name ?? null,
-      started_at: a.start.toISOString(),
+      action_id: c.id,
+      plate: c.plate,
+      name: c.name ?? prev?.name ?? null,
+      started_at: startIso,
       end_at: endIso,
       mode: prev?.mode ?? "fixed",
       block_min: prev?.block_min ?? st.auto_block,
@@ -139,25 +194,32 @@ async function sync(ctx: Ctx, snap: Snapshot, quiet = false): Promise<SessionRow
       state: "active",
       stopped_by_app: false,
       ended_at: null,
-      cost: a.cost ?? prev?.cost ?? null,
+      cost,
       source: prev?.source ?? "extern",
       last_error: prev?.last_error ?? null,
+      parts,
     };
-    if (!prev || !sameT(prev.end_at, endIso) || prev.cost !== row.cost || prev.name !== row.name) {
+    const moved = !!prev && prev.action_id !== c.id;
+    if (!prev || moved || !sameT(prev.end_at, endIso) || Number(prev.cost) !== Number(row.cost) || prev.name !== row.name) {
       await ctx.store.sessionUpsert(row);
     }
+    if (moved) {
+      await ctx.store.sessionUpsert({ action_id: prev!.action_id, state: "ended", ended_at: now.toISOString() });
+    }
     out.push(row);
-    const mins = (a.end.getTime() - a.start.getTime()) / MIN;
-    if (a.cost && a.cost > 0 && mins >= 5) {
-      await ctx.store.cfgSet("rate_per_hour", Math.round((a.cost / mins) * 60 * 100) / 100);
+    for (const a of c.actions) {
+      const mins = (a.end.getTime() - a.start.getTime()) / MIN;
+      if (a.cost && a.cost > 0 && mins >= 5) {
+        await ctx.store.cfgSet("rate_per_hour", Math.round((a.cost / mins) * 60 * 100) / 100);
+      }
     }
   }
-  const liveIds = new Set(live.map((a) => a.id));
   for (const r of local) {
-    if (liveIds.has(r.action_id)) continue;
+    if (used.has(r.action_id)) continue;
     await ctx.store.sessionUpsert({ action_id: r.action_id, state: "ended", ended_at: now.toISOString() });
+    const continues = cs.some((c) => c.plate === r.plate); // loopt door onder een ander actienummer
     const expired = r.end_at && now.getTime() >= new Date(r.end_at).getTime() - 90_000;
-    if (!quiet && !r.stopped_by_app && expired) {
+    if (!quiet && !r.stopped_by_app && expired && !continues) {
       await notify(ctx, {
         title: `${r.name || r.plate} is afgemeld`,
         body: `Parkeertijd afgelopen om ${hhmm(new Date(r.end_at!))}. Staat de auto er nog? Meld dan opnieuw aan.`,
@@ -209,6 +271,12 @@ function wantedEnd(now: Date, body: Json): Date {
 }
 
 const friendly = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+/** Vindt de lopende aanmelding, ook als de app nog een ouder actienummer van dezelfde keten stuurt. */
+async function resolveChain(ctx: Ctx, snap: Snapshot, id: string, plate?: string | null): Promise<Chain | undefined> {
+  const cs = chains(snap, ctx.now());
+  return findChain(cs, id, plate) ?? findChain(cs, id, id ? await ctx.store.sessionPlate(id) : null);
+}
 
 // ---------- acties vanuit de app ----------
 
@@ -306,6 +374,7 @@ async function startAction(ctx: Ctx, device: DeviceRow, body: Json): Promise<Jso
       cost: found.cost,
       source: "app",
       last_error: null,
+      parts: found.cost !== null ? { [found.id]: found.cost } : {},
     });
     if (body.save_favorite && name && !known) {
       try {
@@ -327,22 +396,31 @@ async function extendAction(ctx: Ctx, device: DeviceRow, body: Json): Promise<Js
   const tp = await openPark(ctx);
   try {
     const before = await tp.snapshot();
-    const a = before.actions.find((x) => x.id === id && isLive(x, ctx.now()));
-    if (!a) throw new UserError("Deze parkeeractie loopt niet meer. Meld opnieuw aan.", 404);
+    const c = await resolveChain(ctx, before, id, body.plate);
+    if (!c) throw new UserError("Deze parkeeractie loopt niet meer. Meld opnieuw aan.", 404);
     let until: Date;
     if (body.end) {
       until = wantedEnd(ctx.now(), body);
     } else {
       const m = Number(body.minutes);
-      if (!Number.isFinite(m) || m === 0 || Math.abs(m) > 24 * 60) throw new UserError("Ongeldige duur");
-      until = new Date(a.end.getTime() + m * MIN);
+      if (!Number.isFinite(m) || m <= 0 || m > 24 * 60) throw new UserError("Ongeldige duur");
+      until = new Date(c.end.getTime() + m * MIN);
     }
-    if (until.getTime() < ctx.now().getTime() + MIN) throw new UserError("De eindtijd moet in de toekomst liggen");
-    await tp.extend(id, until);
-    await ctx.store.sessionUpsert({ action_id: id, reminded_for: null, reminded1_for: null, last_error: null });
+    if (until.getTime() <= c.end.getTime() + 30_000) {
+      throw new UserError("Inkorten kan bij 2Park niet. Kies een latere eindtijd, of meld af als het bezoek weg is.");
+    }
+    await tp.extend(c.lastId, until);
     const snap = await tp.snapshot();
-    await ctx.store.log("extend", { id, until: until.toISOString() });
-    return await buildState(ctx, snap, await sync(ctx, snap, true), device);
+    const after = findChain(chains(snap, ctx.now()), c.lastId, c.plate);
+    if (!after || after.end.getTime() <= c.end.getTime() + 30_000) {
+      await ctx.store.log("extend_unconfirmed", { id: c.lastId, until: until.toISOString() });
+      throw new UserError("2Park heeft de verlenging niet verwerkt. Controleer het in 2Park zelf.", 502);
+    }
+    const rows = await sync(ctx, snap, true);
+    const row = rows.find((r) => r.plate === c.plate);
+    if (row) await ctx.store.sessionUpsert({ action_id: row.action_id, last_error: null });
+    await ctx.store.log("extend", { id: c.lastId, until: after.end.toISOString(), chain: after.ids });
+    return await buildState(ctx, snap, rows, device);
   } finally {
     await closePark(ctx, tp);
   }
@@ -352,17 +430,33 @@ async function stopAction(ctx: Ctx, device: DeviceRow, body: Json): Promise<Json
   const id = String(body.action_id ?? "");
   const tp = await openPark(ctx);
   try {
-    const before = await tp.snapshot();
-    if (before.actions.some((x) => x.id === id && isLive(x, ctx.now()))) {
-      await ctx.store.sessionUpsert({ action_id: id, stopped_by_app: true });
-      await tp.stop(id);
+    let snap = await tp.snapshot();
+    const first = await resolveChain(ctx, snap, id, body.plate);
+    const plate = first?.plate ?? null;
+    if (first) {
+      for (const r of await ctx.store.sessionsActive()) {
+        if (r.plate === plate) await ctx.store.sessionUpsert({ action_id: r.action_id, stopped_by_app: true });
+      }
+      // een aanmelding kan uit meerdere aansluitende acties bestaan: allemaal stoppen
+      for (let i = 0; i < 6; i++) {
+        const c = findChain(chains(snap, ctx.now()), id, plate);
+        if (!c) break;
+        try {
+          await tp.stop(c.id);
+        } catch (e) {
+          await ctx.store.log("stop_fail", { id: c.id, error: friendly(e) });
+          if (i === 5) throw e;
+        }
+        snap = await tp.snapshot();
+      }
     }
-    const snap = await tp.snapshot();
-    if (snap.actions.some((x) => x.id === id && isLive(x, ctx.now()))) {
-      await ctx.store.sessionUpsert({ action_id: id, stopped_by_app: false });
+    if (plate && chains(snap, ctx.now()).some((c) => c.plate === plate)) {
+      for (const r of await ctx.store.sessionsActive()) {
+        if (r.plate === plate) await ctx.store.sessionUpsert({ action_id: r.action_id, stopped_by_app: false });
+      }
       throw new UserError("2Park bevestigt het afmelden niet. Probeer opnieuw.", 502);
     }
-    await ctx.store.log("stop", { id });
+    await ctx.store.log("stop", { id, plate });
     return await buildState(ctx, snap, await sync(ctx, snap, true), device);
   } finally {
     await closePark(ctx, tp);
@@ -374,16 +468,26 @@ async function sessionUpdate(ctx: Ctx, device: DeviceRow, body: Json): Promise<J
   const st = await settings(ctx);
   const auto = body.mode === "auto";
   const hours = Math.min(24, Math.max(0.5, Number(body.max_hours) || st.auto_max_hours));
-  await ctx.store.sessionUpsert({
-    action_id: id,
-    mode: auto ? "auto" : "fixed",
-    block_min: Math.min(240, Math.max(10, Number(body.block_min) || st.auto_block)),
-    max_until: auto ? new Date(ctx.now().getTime() + hours * 60 * MIN).toISOString() : null,
-    reminded_for: null,
-    reminded1_for: null,
-    nudged_at: ctx.now().toISOString(),
-  });
-  return await stateAction(ctx, device);
+  const tp = await openPark(ctx);
+  try {
+    const snap = await tp.snapshot();
+    const rows = await sync(ctx, snap, true);
+    const c = await resolveChain(ctx, snap, id, body.plate);
+    const row = c ? rows.find((r) => r.plate === c.plate) : undefined;
+    if (!row) throw new UserError("Deze parkeeractie loopt niet meer.", 404);
+    const patch = {
+      mode: (auto ? "auto" : "fixed") as "auto" | "fixed",
+      block_min: Math.min(240, Math.max(10, Number(body.block_min) || st.auto_block)),
+      max_until: auto ? new Date(ctx.now().getTime() + hours * 60 * MIN).toISOString() : null,
+      nudged_at: ctx.now().toISOString(),
+      last_error: null,
+    };
+    await ctx.store.sessionUpsert({ action_id: row.action_id, ...patch });
+    Object.assign(row, patch);
+    return await buildState(ctx, snap, rows, device);
+  } finally {
+    await closePark(ctx, tp);
+  }
 }
 
 async function favoriteAction(ctx: Ctx, device: DeviceRow, body: Json): Promise<Json> {
@@ -466,6 +570,7 @@ export async function tick(ctx: Ctx): Promise<Json> {
     }
     await ctx.store.cfgSet("last_poll", now.toISOString());
     const rows = await sync(ctx, snap);
+    const cs = chains(snap, now);
 
     for (const r of rows) {
       const end = new Date(r.end_at!);
@@ -500,7 +605,12 @@ export async function tick(ctx: Ctx): Promise<Json> {
 
       if (canExtend) {
         try {
-          await tp.extend(r.action_id, new Date(target));
+          const chain = findChain(cs, r.action_id, r.plate);
+          await tp.extend(chain?.lastId ?? r.action_id, new Date(target));
+          const check = findChain(chains(await tp.snapshot(), now), r.action_id, r.plate);
+          if (!check || check.end.getTime() <= end.getTime() + 30_000) {
+            throw new Error("2Park heeft de verlenging niet verwerkt");
+          }
           await ctx.store.sessionUpsert({
             action_id: r.action_id,
             end_at: new Date(target).toISOString(),
